@@ -8,6 +8,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/vsmcn/sip/pkg/log"
+	"github.com/vsmcn/sip/pkg/util"
 )
 
 // A representation of a SIP method.
@@ -111,6 +112,7 @@ type Message interface {
 	SetSource(src string)
 	Destination() string
 	SetDestination(dest string)
+	SetCharset(util.Charset)
 
 	IsCancel() bool
 	IsAck() bool
@@ -417,6 +419,8 @@ type message struct {
 	src        string
 	dest       string
 	fields     log.Fields
+
+	charset util.Charset
 }
 
 func (msg *message) MessageID() MessageID {
@@ -438,18 +442,24 @@ func (msg *message) Fields() log.Fields {
 }
 
 func (msg *message) String() string {
-	var buffer bytes.Buffer
+	var buf bytes.Buffer
+	var dst string
 
 	// write message start line
-	buffer.WriteString(msg.StartLine() + "\r\n")
+	buf.WriteString(msg.StartLine() + "\r\n")
 	// Write the headers.
 	msg.mu.RLock()
-	buffer.WriteString(msg.headers.String())
+	buf.WriteString(msg.headers.String())
 	msg.mu.RUnlock()
 	// message body
-	buffer.WriteString("\r\n" + msg.Body())
+	buf.WriteString("\r\n" + msg.Body())
 
-	return buffer.String()
+	// default utf-8
+	if msg.charset == "" {
+		msg.charset = util.UTF_8
+	}
+	dst, _ = util.UTF8To(msg.charset, buf.String())
+	return dst
 }
 
 func (msg *message) SipVersion() string {
@@ -520,6 +530,12 @@ func (msg *message) Destination() string {
 func (msg *message) SetDestination(dest string) {
 	msg.mu.Lock()
 	msg.dest = dest
+	msg.mu.Unlock()
+}
+
+func (msg *message) SetCharset(charset util.Charset) {
+	msg.mu.Lock()
+	msg.charset = charset
 	msg.mu.Unlock()
 }
 
